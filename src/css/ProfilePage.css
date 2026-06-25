@@ -1,0 +1,153 @@
+.profile-page {
+  color: white;
+  padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+}
+
+.profile-header {
+  text-align: center;
+  padding: 24px 20px 16px;
+}
+
+.avatar-box {
+  position: relative;
+  display: inline-block;
+}
+
+.avatar-edit {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: #ffffff;
+  border-radius: 50%;
+  padding: 6px;
+  cursor: pointer;
+  color: #000;
+}
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+.username {
+  color: #555;
+  font-size: 14px;
+}
+
+.bio {
+  color: #888;
+  margin-top: 5px;
+  font-size: 14px;
+}
+
+.stats {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #222;
+}
+
+.stats div { text-align: center; }
+
+.stats span {
+  display: block;
+  font-size: 12px;
+  color: #555;
+  margin-top: 2px;
+}
+
+.edit-btn {
+  margin-top: 12px;
+  padding: 8px 20px;
+  border: 1px solid #333;
+  border-radius: 20px;
+  color: #ccc;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.edit-btn:hover {
+  background: #111;
+  border-color: #555;
+}
+
+.profile-content { padding: 0 16px 16px; }
+
+.card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 13px;
+}
+
+.group-item:last-child { border-bottom: none; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}
+
+.grid-item {
+  height: 90px;
+  background: #111;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.empty-box {
+  padding: 24px;
+  text-align: center;
+  border: 1px dashed #333;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #444;
+  font-size: 13px;
+}
+
+.settings-btn,
+.logout-btn {
+  width: 100%;
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #888;
+  font-size: 14px;
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+
+.settings-btn:hover { background: #111; }
+
+.logout-btn {
+  color: #ff4444;
+}
+
+.logout-btn:hover { background: rgba(255,60,60,0.06); }
