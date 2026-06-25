@@ -24,9 +24,9 @@ export default function TopBar({ title, showLogo, rightAction, back }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 10,
-              background: '#fff',
+              background: '#535353',
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
-            }}>🚗</div>
+            }}>C</div>
             <span style={{ fontFamily: 'sans-serif', fontWeight: 800, fontSize: 18, letterSpacing: -0.5 }}>
               Car<span style={{ color: '#666' }}>Connect</span>
             </span>
