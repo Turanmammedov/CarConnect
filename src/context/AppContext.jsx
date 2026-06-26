@@ -127,8 +127,9 @@ export function AppProvider({ children }) {
     if (user) {
       fetchNotifications()
       fetchFollowedPosts()
-      // Push bildiriş qeydiyyatı
-      if (isPushSupported()) {
+      // Push: yalnız icazə artıq verilibsə qeydiyyat et
+      // İcazə soruşmaq üçün istifadəçi özü düyməyə basmalıdır (bax: NotificationsPage)
+      if (isPushSupported() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         registerPushNotifications(user.id)
       }
     }
@@ -147,48 +148,75 @@ export function AppProvider({ children }) {
   // --- Real-time notifications ---
   useEffect(() => {
     if (!user) return
+
     let channel
+    let pollInterval
+
+    const handleNewNotif = (payload) => {
+      fetchNotifications()
+
+      // Brauzer bildirişi göstər (tətbiq açıq olarkən)
+      if (
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted' &&
+        payload?.new
+      ) {
+        const n = payload.new
+        const msg = n.message || ''
+        // Qrup adını mesajdan çıxar: "[QrupAdı] sender: ..."
+        const grpMatch = msg.match(/^\[(.+?)\]/)
+        const grpName = grpMatch ? grpMatch[1] : 'Qrup'
+        const titles = {
+          group_message:  `💬 ${grpName}`,
+          direct_message: '💬 Yeni mesaj',
+          join_request:   '👥 Qrupa qoşulma istəyi',
+          join_accepted:  '✅ Qrupa qoşuldunuz',
+          like:           '❤️ Paylaşımınızı bəyəndilər',
+          follow:         '👤 Sizi izləməyə başladılar',
+        }
+        const title = titles[n.type] || '🔔 CarConnect'
+        const body  = n.message || title
+        try {
+          new Notification(title, {
+            body,
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            tag: `${n.type}-${n.reference_id || n.id}`,
+            renotify: true,
+          })
+        } catch (_) {}
+      }
+    }
+
     try {
       channel = supabase
-        .channel('notif-realtime')
+        .channel(`notif-${user.id}`)
         .on('postgres_changes', {
-          event: 'INSERT', schema: 'public', table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        }, (payload) => {
-          fetchNotifications()
-          // Tətbiq açıq olarkən brauzer bildirişi göstər
-          if (
-            typeof Notification !== 'undefined' &&
-            Notification.permission === 'granted' &&
-            payload?.new
-          ) {
-            const n = payload.new
-            const titles = {
-              group_message:  `💬 ${n.group_name || 'Qrup'} — Yeni mesaj`,
-              direct_message: '💬 Yeni şəxsi mesaj',
-              join_request:   '👥 Qrupa qoşulma istəyi',
-              join_accepted:  '✅ Qrupa qoşuldunuz',
-              like:           '❤️ Paylaşımınızı bəyəndilər',
-              follow:         '👤 Sizi izləməyə başladılar',
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        }, handleNewNotif)
+        .subscribe((status) => {
+          console.log('Notification realtime status:', status)
+          if (status === 'SUBSCRIBED') {
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('Realtime bağlantı yoxdur, polling aktiv')
+            if (!pollInterval) {
+              pollInterval = setInterval(fetchNotifications, 10000)
             }
-            const title = titles[n.type] || '🔔 Yeni bildiriş'
-            const body  = n.message || title
-            try {
-              new Notification(title, {
-                body,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
-                tag: n.type + '-' + (n.reference_id || n.id),
-                renotify: true,
-              })
-            } catch (_) {}
           }
         })
-        .subscribe((status, err) => {
-          if (err) console.warn('Notification realtime not available:', err.message)
-        })
-    } catch (e) {}
-    return () => { if (channel) supabase.removeChannel(channel) }
+    } catch (e) {
+      console.warn('Realtime başlatma xətası:', e)
+      pollInterval = setInterval(fetchNotifications, 15000)
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+      if (pollInterval) clearInterval(pollInterval)
+    }
   }, [user, fetchNotifications])
 
   // --- Add post ---
@@ -355,19 +383,31 @@ export function AppProvider({ children }) {
       ])
 
       const senderName = senderProfile?.username || senderProfile?.full_name || user.email?.split('@')[0] || 'İstifadəçi'
+      const groupName = grp?.name || 'Qrup'
 
       if (members?.length) {
-        const notifs = members.map(m => ({
-          user_id: m.user_id,
+        // group_name sütunu olmaya bilər — onu message içinə yazırıq
+        const notifBase = {
           from_user: user.id,
           type: 'group_message',
           reference_id: groupId,
-          message: `${senderName}: ${content.slice(0, 80)}${content.length > 80 ? '...' : ''}`,
-          group_name: grp?.name || '',
-        }))
-        await supabase.from('notifications').insert(notifs).then(() => {}).catch(() => {})
+          message: `[${groupName}] ${senderName}: ${content.slice(0, 80)}${content.length > 80 ? '...' : ''}`,
+          read: false,
+        }
+
+        // Əvvəlcə group_name ilə cəhd et, xəta çıxsa onsuz yenidən cəhd et
+        const notifs = members.map(m => ({ ...notifBase, user_id: m.user_id }))
+        const { error: insertErr } = await supabase.from('notifications').insert(
+          notifs.map(n => ({ ...n, group_name: groupName }))
+        )
+        if (insertErr) {
+          // group_name sütunu yoxdur — onsuz yenidən cəhd et
+          await supabase.from('notifications').insert(notifs).catch(() => {})
+        }
       }
-    } catch (_) {}
+    } catch (e) {
+      console.warn('Bildiriş göndərmə xətası:', e)
+    }
 
     return result
   }
@@ -432,8 +472,11 @@ export function AppProvider({ children }) {
         type: 'direct_message',
         reference_id: user.id,
         message: `${senderName}: ${content.slice(0, 80)}${content.length > 80 ? '...' : ''}`,
-      }).then(() => {}).catch(() => {})
-    } catch (_) {}
+        read: false,
+      }).catch(() => {})
+    } catch (e) {
+      console.warn('DM bildiriş xətası:', e)
+    }
 
     return result
   }

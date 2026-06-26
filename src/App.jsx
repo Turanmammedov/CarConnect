@@ -29,7 +29,7 @@ function AppShell() {
 
   return (
     <AppProvider>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <div className="max-w-lg mx-auto min-h-screen relative">
           <Routes>
             <Route path="/" element={<HomePage />} />

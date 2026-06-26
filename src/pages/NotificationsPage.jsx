@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { Bell, Heart, Users, UserPlus, X, Check, MessageCircle, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Bell, Heart, Users, UserPlus, X, Check, MessageCircle, Loader2, BellOff } from "lucide-react";
 import TopBar from "../components/layout/TopBar";
 import { useApp } from "../context/AppContext";
 import { useAuth } from "../context/AuthContext";
+import { isPushSupported, registerPushNotifications } from "../lib/pushNotifications";
 import "../css/NotificationsPage.css";
 
 const TYPE_CONFIG = {
@@ -19,6 +20,15 @@ export default function NotificationsPage() {
   const { notifications, markNotifRead, respondJoinRequest, unreadCount } = useApp();
   const { user } = useAuth();
   const [responding, setResponding] = useState({});
+  const [pushStatus, setPushStatus] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+
+  async function handleEnablePush() {
+    if (!isPushSupported()) return;
+    const granted = await registerPushNotifications(user.id);
+    setPushStatus(granted ? 'granted' : 'denied');
+  }
 
   async function handleRespond(notif, accept) {
     setResponding(prev => ({ ...prev, [notif.id]: true }));
@@ -40,6 +50,26 @@ export default function NotificationsPage() {
   return (
     <div className="notifications-page">
       <TopBar title={`Bildirişlər${unreadCount > 0 ? ` (${unreadCount})` : ""}`} />
+
+      {/* Push icazə banneri */}
+      {isPushSupported() && pushStatus === 'default' && (
+        <div style={{ margin:"12px 16px 0", background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.3)", borderRadius:12, padding:"12px 14px", display:"flex", alignItems:"center", gap:12 }}>
+          <BellOff size={18} color="#6366f1" style={{ flexShrink:0 }} />
+          <div style={{ flex:1 }}>
+            <p style={{ color:"white", fontSize:13, fontWeight:600, margin:0 }}>Bildirişlər söndürülüb</p>
+            <p style={{ color:"#888", fontSize:11, margin:"2px 0 0" }}>Mesaj bildirişləri almaq üçün aktiv edin</p>
+          </div>
+          <button onClick={handleEnablePush}
+            style={{ background:"#6366f1", border:"none", borderRadius:8, color:"white", padding:"7px 12px", cursor:"pointer", fontSize:12, fontWeight:700, flexShrink:0 }}>
+            Aktiv et
+          </button>
+        </div>
+      )}
+      {pushStatus === 'denied' && (
+        <div style={{ margin:"12px 16px 0", background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.2)", borderRadius:12, padding:"10px 14px", fontSize:12, color:"#f87171" }}>
+          🔕 Bildirişlər bloklanıb. Brauzer ayarlarından icazə verin.
+        </div>
+      )}
 
       <div className="notifications-list">
         {notifications.length === 0 ? (

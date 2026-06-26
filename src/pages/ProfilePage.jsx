@@ -10,10 +10,21 @@ import { uploadImage, avatarUrl } from '../lib/cloudinary'
 
 // --- Car Editor Modal ---
 function CarEditor({ car, onSave, onClose }) {
-  const [form, setForm] = useState(car || {
+  const defaultForm = {
     brand: '', model: '', year: new Date().getFullYear(), color: '#f97316',
     horsepower: '', mods: [], photo_url: ''
-  })
+  }
+  const [form, setForm] = useState(() => ({
+    ...defaultForm,
+    ...(car || {}),
+    brand: car?.brand || '',
+    model: car?.model || '',
+    year: car?.year || new Date().getFullYear(),
+    color: car?.color || '#f97316',
+    horsepower: car?.horsepower || '',
+    mods: car?.mods || [],
+    photo_url: car?.photo_url || '',
+  }))
   const [newMod, setNewMod] = useState('')
   const [saving, setSaving] = useState(false)
   const [photoUploading, setPhotoUploading] = useState(false)
