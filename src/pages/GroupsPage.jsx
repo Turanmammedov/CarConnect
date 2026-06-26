@@ -18,9 +18,46 @@ function AdminPanel({ group, onClose, onUpdated }) {
   const [name, setName] = useState(group.name || "");
   const [description, setDescription] = useState(group.description || "");
   const [locationSharing, setLocationSharing] = useState(group.location_sharing ?? false);
+  const [rules, setRules] = useState(group.rules || []);
+  const [newRule, setNewRule] = useState("");
+  const [editingIdx, setEditingIdx] = useState(null);
+  const [editingText, setEditingText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  function addRule() {
+    const trimmed = newRule.trim();
+    if (!trimmed) return;
+    setRules(prev => [...prev, trimmed]);
+    setNewRule("");
+  }
+
+  function removeRule(idx) {
+    setRules(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function startEdit(idx) {
+    setEditingIdx(idx);
+    setEditingText(rules[idx]);
+  }
+
+  function saveEdit() {
+    if (!editingText.trim()) return;
+    setRules(prev => prev.map((r, i) => i === editingIdx ? editingText.trim() : r));
+    setEditingIdx(null);
+    setEditingText("");
+  }
+
+  function moveRule(idx, dir) {
+    setRules(prev => {
+      const arr = [...prev];
+      const swapIdx = idx + dir;
+      if (swapIdx < 0 || swapIdx >= arr.length) return arr;
+      [arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]];
+      return arr;
+    });
+  }
 
   async function handleSave() {
     if (!name.trim()) { setError("Ad boş ola bilməz"); return; }
@@ -30,6 +67,7 @@ function AdminPanel({ group, onClose, onUpdated }) {
       name: name.trim(),
       description: description.trim(),
       location_sharing: locationSharing,
+      rules,
     });
     setLoading(false);
     if (error) { setError(error.message); return; }
@@ -37,9 +75,11 @@ function AdminPanel({ group, onClose, onUpdated }) {
     setTimeout(() => { setSuccess(false); onUpdated(); }, 1200);
   }
 
+  const inputStyle = { width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:10, padding:"10px 12px", color:"white", outline:"none", boxSizing:"border-box", fontSize:14 };
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:300 }} onClick={onClose}>
-      <div style={{ width:"100%", maxWidth:500, background:"#111", borderRadius:"20px 20px 0 0", padding:20, display:"flex", flexDirection:"column", gap:14 }} onClick={e => e.stopPropagation()}>
+      <div style={{ width:"100%", maxWidth:500, background:"#111", borderRadius:"20px 20px 0 0", padding:20, display:"flex", flexDirection:"column", gap:14, maxHeight:"90vh", overflowY:"auto" }} onClick={e => e.stopPropagation()}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ display:"flex", alignItems:"center", gap:8, color:"white" }}>
             <Crown size={16} color="orange" />
@@ -52,14 +92,13 @@ function AdminPanel({ group, onClose, onUpdated }) {
 
         <div>
           <p style={{ fontSize:11, color:"#888", marginBottom:4 }}>Qrup adı</p>
-          <input value={name} onChange={e => setName(e.target.value)}
-            style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:10, padding:"10px 12px", color:"white", outline:"none", boxSizing:"border-box", fontSize:14 }} />
+          <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
         </div>
 
         <div>
           <p style={{ fontSize:11, color:"#888", marginBottom:4 }}>Açıqlama</p>
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
-            style={{ width:"100%", background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:10, padding:"10px 12px", color:"white", outline:"none", boxSizing:"border-box", fontSize:13, resize:"none" }} />
+            style={{ ...inputStyle, fontSize:13, resize:"none" }} />
         </div>
 
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:12, padding:"12px 14px" }}>
@@ -72,6 +111,64 @@ function AdminPanel({ group, onClose, onUpdated }) {
               ? <ToggleRight size={32} color="#22c55e" />
               : <ToggleLeft size={32} color="#555" />}
           </button>
+        </div>
+
+        {/* ── QAYDALAR ── */}
+        <div>
+          <p style={{ fontSize:11, color:"#888", marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>
+            📋 Qrup Qaydaları
+          </p>
+
+          {rules.length === 0 && (
+            <div style={{ fontSize:12, color:"#444", padding:"10px 0", textAlign:"center" }}>Hələ qayda yoxdur</div>
+          )}
+
+          {rules.map((rule, idx) => (
+            <div key={idx} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:10, padding:"8px 10px", marginBottom:6 }}>
+              {editingIdx === idx ? (
+                <div style={{ display:"flex", gap:6 }}>
+                  <input
+                    value={editingText}
+                    onChange={e => setEditingText(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && saveEdit()}
+                    autoFocus
+                    style={{ ...inputStyle, flex:1, fontSize:12, padding:"6px 10px" }}
+                  />
+                  <button onClick={saveEdit} style={{ background:"#22c55e22", border:"1px solid #22c55e44", borderRadius:8, color:"#22c55e", padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700 }}>✓</button>
+                  <button onClick={() => setEditingIdx(null)} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:8, color:"#888", padding:"4px 8px", cursor:"pointer", fontSize:12 }}>İptal</button>
+                </div>
+              ) : (
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ fontSize:11, color:"#f97316", fontWeight:700, minWidth:20 }}>{idx + 1}.</span>
+                  <span style={{ flex:1, fontSize:12, color:"#ccc", lineHeight:1.4 }}>{rule}</span>
+                  <div style={{ display:"flex", gap:4, flexShrink:0 }}>
+                    <button onClick={() => moveRule(idx, -1)} disabled={idx === 0}
+                      style={{ background:"none", border:"none", color: idx === 0 ? "#333" : "#666", cursor: idx === 0 ? "default" : "pointer", padding:"2px 4px", fontSize:12 }}>↑</button>
+                    <button onClick={() => moveRule(idx, 1)} disabled={idx === rules.length - 1}
+                      style={{ background:"none", border:"none", color: idx === rules.length - 1 ? "#333" : "#666", cursor: idx === rules.length - 1 ? "default" : "pointer", padding:"2px 4px", fontSize:12 }}>↓</button>
+                    <button onClick={() => startEdit(idx)}
+                      style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:6, color:"white", padding:"3px 8px", cursor:"pointer", fontSize:11 }}>✏️</button>
+                    <button onClick={() => removeRule(idx)}
+                      style={{ background:"rgba(255,80,80,0.1)", border:"1px solid rgba(255,80,80,0.2)", borderRadius:6, color:"#ff6b6b", padding:"3px 8px", cursor:"pointer", fontSize:11 }}>🗑</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          <div style={{ display:"flex", gap:6, marginTop:4 }}>
+            <input
+              value={newRule}
+              onChange={e => setNewRule(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addRule()}
+              placeholder="Yeni qayda əlavə et..."
+              style={{ ...inputStyle, flex:1, fontSize:12, padding:"8px 12px" }}
+            />
+            <button onClick={addRule}
+              style={{ background:"rgba(249,115,22,0.15)", border:"1px solid rgba(249,115,22,0.3)", borderRadius:10, color:"orange", padding:"8px 12px", cursor:"pointer", fontWeight:700, fontSize:13, flexShrink:0 }}>
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
 
         {error && <div style={{ color:"#ff6b6b", fontSize:12 }}>⚠️ {error}</div>}
@@ -332,6 +429,23 @@ function GroupDetailView({ group: initialGroup, isMember: isMemberProp, myGroupI
                     #{t}
                   </span>
                 ))}
+              </div>
+            )}
+
+            {/* Qrup Qaydaları */}
+            {group.rules?.length > 0 && (
+              <div style={{ marginBottom:16 }}>
+                <p style={{ fontSize:11, color:"#888", marginBottom:8, display:"flex", alignItems:"center", gap:4 }}>
+                  📋 Qrup Qaydaları
+                </p>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  {group.rules.map((rule, idx) => (
+                    <div key={idx} style={{ display:"flex", gap:10, background:"rgba(249,115,22,0.06)", border:"1px solid rgba(249,115,22,0.15)", borderRadius:10, padding:"9px 12px" }}>
+                      <span style={{ fontSize:11, color:"#f97316", fontWeight:700, minWidth:18 }}>{idx + 1}.</span>
+                      <span style={{ fontSize:12, color:"#ccc", lineHeight:1.5 }}>{rule}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

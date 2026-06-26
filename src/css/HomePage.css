@@ -21,6 +21,33 @@
   border-bottom: 1px solid #222;
 }
 
+.feed-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 0;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+.feed-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #555;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 4px 10px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.feed-tab.active {
+  color: white;
+  border-bottom-color: white;
+}
+
 .feed-header {
   display: flex;
   justify-content: space-between;

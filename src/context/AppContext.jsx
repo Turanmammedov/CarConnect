@@ -1,15 +1,18 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { registerPushNotifications, isPushSupported } from '../lib/pushNotifications'
 
 const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
   const { user } = useAuth()
   const [posts, setPosts]               = useState([])
+  const [followedPosts, setFollowedPosts] = useState([])
   const [groups, setGroups]             = useState([])
   const [notifications, setNotifications] = useState([])
   const [postsLoading, setPostsLoading] = useState(true)
+  const [followedPostsLoading, setFollowedPostsLoading] = useState(true)
   const [groupsLoading, setGroupsLoading] = useState(true)
 
   // --- Posts / Stories ---
@@ -35,6 +38,49 @@ export function AppProvider({ children }) {
       setPostsLoading(false)
     }
   }, [])
+
+  // --- Followed Users Posts (Ana Səhifə üçün) ---
+  const fetchFollowedPosts = useCallback(async () => {
+    if (!user) {
+      setFollowedPostsLoading(false)
+      return
+    }
+    setFollowedPostsLoading(true)
+    try {
+      // İzlənilən istifadəçilərin ID-lərini al
+      const { data: followData } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id)
+
+      const followedIds = followData?.map(f => f.following_id) || []
+
+      if (followedIds.length === 0) {
+        setFollowedPosts([])
+        setFollowedPostsLoading(false)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('stories')
+        .select(`
+          *,
+          profiles:user_id ( id, username, full_name, avatar_url,
+            cars ( brand, model, year, color, horsepower, mods )
+          ),
+          story_likes ( user_id )
+        `)
+        .in('user_id', followedIds)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (error) throw error
+      setFollowedPosts(data || [])
+    } catch (err) {
+      console.error('İzlənilən paylaşımlar yüklənmədi:', err)
+    } finally {
+      setFollowedPostsLoading(false)
+    }
+  }, [user])
 
   // --- Groups ---
   const fetchGroups = useCallback(async () => {
@@ -78,8 +124,15 @@ export function AppProvider({ children }) {
   }, [fetchPosts, fetchGroups])
 
   useEffect(() => {
-    if (user) fetchNotifications()
-  }, [user, fetchNotifications])
+    if (user) {
+      fetchNotifications()
+      fetchFollowedPosts()
+      // Push bildiriş qeydiyyatı
+      if (isPushSupported()) {
+        registerPushNotifications(user.id)
+      }
+    }
+  }, [user, fetchNotifications, fetchFollowedPosts])
 
   // --- Real-time posts ---
   useEffect(() => {
@@ -117,7 +170,10 @@ export function AppProvider({ children }) {
       .insert({ user_id: user.id, caption, image_url: imageUrl, post_type: type })
       .select()
       .single()
-    if (!error) fetchPosts()
+    if (!error) {
+      fetchPosts()
+      fetchFollowedPosts()
+    }
     return { data, error }
   }
 
@@ -128,7 +184,10 @@ export function AppProvider({ children }) {
       .delete()
       .eq('id', postId)
       .eq('user_id', user.id)
-    if (!error) fetchPosts()
+    if (!error) {
+      fetchPosts()
+      fetchFollowedPosts()
+    }
     return { error }
   }
 
@@ -143,6 +202,7 @@ export function AppProvider({ children }) {
       await supabase.from('story_likes').insert({ story_id: storyId, user_id: user.id })
     }
     fetchPosts()
+    fetchFollowedPosts()
   }
 
   // --- Groups ---
@@ -255,7 +315,39 @@ export function AppProvider({ children }) {
 
   async function sendGroupMessage(groupId, content) {
     if (!user) return { error: new Error('Giriş edilməyib') }
-    return await supabase.from('group_messages').insert({ group_id: groupId, user_id: user.id, content })
+    const result = await supabase.from('group_messages').insert({ group_id: groupId, user_id: user.id, content })
+
+    // Qrup üzvlərinə bildiriş əlavə et (öz xaricindəkilərə)
+    try {
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('user_id')
+        .eq('group_id', groupId)
+        .neq('user_id', user.id)
+
+      const { data: grp } = await supabase
+        .from('groups')
+        .select('name')
+        .eq('id', groupId)
+        .single()
+
+      const senderName = user.email?.split('@')[0] || 'İstifadəçi'
+
+      if (members?.length) {
+        const notifs = members.map(m => ({
+          user_id: m.user_id,
+          from_user: user.id,
+          type: 'group_message',
+          reference_id: groupId,
+          message: `${senderName}: ${content.slice(0, 60)}${content.length > 60 ? '...' : ''}`,
+          group_name: grp?.name || '',
+        }))
+
+        await supabase.from('notifications').insert(notifs).then(() => {}).catch(() => {})
+      }
+    } catch (_) {}
+
+    return result
   }
 
   // --- Events ---
@@ -304,7 +396,21 @@ export function AppProvider({ children }) {
 
   async function sendDM(toUserId, content) {
     if (!user) return { error: new Error('Giriş edilməyib') }
-    return await supabase.from('direct_messages').insert({ from_user: user.id, to_user: toUserId, content })
+    const result = await supabase.from('direct_messages').insert({ from_user: user.id, to_user: toUserId, content })
+
+    // Qarşı tərəfə bildiriş əlavə et
+    try {
+      const senderName = user.email?.split('@')[0] || 'İstifadəçi'
+      await supabase.from('notifications').insert({
+        user_id: toUserId,
+        from_user: user.id,
+        type: 'direct_message',
+        reference_id: user.id,
+        message: `${senderName}: ${content.slice(0, 60)}${content.length > 60 ? '...' : ''}`,
+      }).then(() => {}).catch(() => {})
+    } catch (_) {}
+
+    return result
   }
 
   // --- Mark notification read ---
@@ -319,11 +425,13 @@ export function AppProvider({ children }) {
   async function followUser(targetId) {
     if (!user || targetId === user.id) return
     await supabase.from('follows').insert({ follower_id: user.id, following_id: targetId }).then(()=>{}).catch(()=>{})
+    fetchFollowedPosts()
   }
 
   async function unfollowUser(targetId) {
     if (!user) return
     await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId)
+    fetchFollowedPosts()
   }
 
   async function getFollowStatus(targetId) {
@@ -371,6 +479,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       posts, postsLoading, fetchPosts,
+      followedPosts, followedPostsLoading, fetchFollowedPosts,
       groups, groupsLoading, fetchGroups,
       notifications, fetchNotifications, markNotifRead, unreadCount,
       addPost, deletePost, toggleLike,
