@@ -154,7 +154,36 @@ export function AppProvider({ children }) {
         .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'notifications',
           filter: `user_id=eq.${user.id}`
-        }, () => fetchNotifications())
+        }, (payload) => {
+          fetchNotifications()
+          // Tətbiq açıq olarkən brauzer bildirişi göstər
+          if (
+            typeof Notification !== 'undefined' &&
+            Notification.permission === 'granted' &&
+            payload?.new
+          ) {
+            const n = payload.new
+            const titles = {
+              group_message:  `💬 ${n.group_name || 'Qrup'} — Yeni mesaj`,
+              direct_message: '💬 Yeni şəxsi mesaj',
+              join_request:   '👥 Qrupa qoşulma istəyi',
+              join_accepted:  '✅ Qrupa qoşuldunuz',
+              like:           '❤️ Paylaşımınızı bəyəndilər',
+              follow:         '👤 Sizi izləməyə başladılar',
+            }
+            const title = titles[n.type] || '🔔 Yeni bildiriş'
+            const body  = n.message || title
+            try {
+              new Notification(title, {
+                body,
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                tag: n.type + '-' + (n.reference_id || n.id),
+                renotify: true,
+              })
+            } catch (_) {}
+          }
+        })
         .subscribe((status, err) => {
           if (err) console.warn('Notification realtime not available:', err.message)
         })
@@ -319,19 +348,13 @@ export function AppProvider({ children }) {
 
     // Qrup üzvlərinə bildiriş əlavə et (öz xaricindəkilərə)
     try {
-      const { data: members } = await supabase
-        .from('group_members')
-        .select('user_id')
-        .eq('group_id', groupId)
-        .neq('user_id', user.id)
+      const [{ data: members }, { data: grp }, { data: senderProfile }] = await Promise.all([
+        supabase.from('group_members').select('user_id').eq('group_id', groupId).neq('user_id', user.id),
+        supabase.from('groups').select('name').eq('id', groupId).single(),
+        supabase.from('profiles').select('username, full_name').eq('id', user.id).single(),
+      ])
 
-      const { data: grp } = await supabase
-        .from('groups')
-        .select('name')
-        .eq('id', groupId)
-        .single()
-
-      const senderName = user.email?.split('@')[0] || 'İstifadəçi'
+      const senderName = senderProfile?.username || senderProfile?.full_name || user.email?.split('@')[0] || 'İstifadəçi'
 
       if (members?.length) {
         const notifs = members.map(m => ({
@@ -339,10 +362,9 @@ export function AppProvider({ children }) {
           from_user: user.id,
           type: 'group_message',
           reference_id: groupId,
-          message: `${senderName}: ${content.slice(0, 60)}${content.length > 60 ? '...' : ''}`,
+          message: `${senderName}: ${content.slice(0, 80)}${content.length > 80 ? '...' : ''}`,
           group_name: grp?.name || '',
         }))
-
         await supabase.from('notifications').insert(notifs).then(() => {}).catch(() => {})
       }
     } catch (_) {}
@@ -400,13 +422,16 @@ export function AppProvider({ children }) {
 
     // Qarşı tərəfə bildiriş əlavə et
     try {
-      const senderName = user.email?.split('@')[0] || 'İstifadəçi'
+      const { data: senderProfile } = await supabase
+        .from('profiles').select('username, full_name').eq('id', user.id).single()
+      const senderName = senderProfile?.username || senderProfile?.full_name || user.email?.split('@')[0] || 'İstifadəçi'
+
       await supabase.from('notifications').insert({
         user_id: toUserId,
         from_user: user.id,
         type: 'direct_message',
         reference_id: user.id,
-        message: `${senderName}: ${content.slice(0, 60)}${content.length > 60 ? '...' : ''}`,
+        message: `${senderName}: ${content.slice(0, 80)}${content.length > 80 ? '...' : ''}`,
       }).then(() => {}).catch(() => {})
     } catch (_) {}
 

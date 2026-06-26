@@ -1,16 +1,18 @@
 import { useState } from "react";
-import { Bell, Heart, Users, UserPlus, X, Check, ChevronRight, Loader2 } from "lucide-react";
+import { Bell, Heart, Users, UserPlus, X, Check, MessageCircle, Loader2 } from "lucide-react";
 import TopBar from "../components/layout/TopBar";
 import { useApp } from "../context/AppContext";
 import { useAuth } from "../context/AuthContext";
 import "../css/NotificationsPage.css";
 
 const TYPE_CONFIG = {
-  like:          { icon: Heart,    color: "#ef4444", label: "Bəyəndi" },
-  group:         { icon: Users,    color: "#8b5cf6", label: "Qrup" },
-  follow:        { icon: UserPlus, color: "#3b82f6", label: "İzlədi" },
-  join_request:  { icon: Users,    color: "#f97316", label: "Qoşulma İstəyi" },
-  join_accepted: { icon: Check,    color: "#22c55e", label: "Qəbul edildi" },
+  like:           { icon: Heart,         color: "#ef4444", label: "Bəyəndi" },
+  group:          { icon: Users,         color: "#8b5cf6", label: "Qrup" },
+  follow:         { icon: UserPlus,      color: "#3b82f6", label: "İzlədi" },
+  join_request:   { icon: Users,         color: "#f97316", label: "Qoşulma İstəyi" },
+  join_accepted:  { icon: Check,         color: "#22c55e", label: "Qəbul edildi" },
+  group_message:  { icon: MessageCircle, color: "#6366f1", label: "Qrup Mesajı" },
+  direct_message: { icon: MessageCircle, color: "#06b6d4", label: "Şəxsi Mesaj" },
 };
 
 export default function NotificationsPage() {
